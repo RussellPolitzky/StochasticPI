@@ -1,13 +1,14 @@
 ﻿module StochasticPI.fs
 
 open System
+open System.Threading.Tasks
 open SequenceExtensions
 
 open Fmat.Numerics
 open Fmat.Numerics.MatrixFunctions
 open Fmat.Numerics.BasicStat
 
- 
+
 //------------------------------------------------------------------------------------
 // Find PI using a stochastic method.                                                          
 //------------------------------------------------------------------------------------
@@ -47,10 +48,13 @@ let piEstimationSequence =
 
 
 //------------------------------------------------------------------------------------
-// This a simple imperative version of the raw algo.  It does not
-// use anything special and is really a simple and naive implementation.
+// This a simple imperative version of the raw algo.  It doesn't use
+// anything special, is efficient in terms of memory consumption
+// and runs more than twice as fast as any of the other implementations.
 //
 // This is a lot like what we might have written in C or Fortran.
+// In this guise it ignores all forms of parallelism although it
+// shoud be easy to spin up a number of tasks to solve this problem.
 //------------------------------------------------------------------------------------
 let piImperative n = 
 
@@ -61,7 +65,7 @@ let piImperative n =
     let mutable y        = 0.0 
 
     for i = 0 to n do
-        x <- randInstance.NextDouble()
+        x <- randInstance.NextDouble() //
         y <- randInstance.NextDouble()
         if ((x**2.0 + y**2.0) <= 1.0) then incircle <- incircle + 1L
         total <- total + 1L
@@ -82,3 +86,45 @@ let fmatCalcPi n =
    let circ = new Matrix(d .< 1.0)
    let m = sum(circ,1)
    float(m)/(float)n*4.0
+
+
+
+//------------------------------------------------------------------------------------
+// See: http://viralfsharp.com/2012/02/25/outperforming-mathnet-with-task-parallel-library/
+//      http://blogs.msdn.com/b/pfxteam/archive/2009/02/19/9434171.aspx
+// This parallel version uses the TPL and 8 threads to get the most out of 
+// the quad core i7.  
+//
+// Notice how much more effort it take to achieve this.
+//------------------------------------------------------------------------------------
+let TplPiImperative noPoints = 
+   let seedGen = new Random() // Creates seeds for all random generators.
+   let calc n = 
+       let randInstance     = new Random(seedGen.Next()) // Found I had to seed this or we got bad results.
+       let mutable incircle = 0L
+       let mutable total    = 0L
+       let mutable x        = 0.0 
+       let mutable y        = 0.0 
+       for i = 0 to n do
+           x <- randInstance.NextDouble() 
+           y <- randInstance.NextDouble()
+           if ((x**2.0 + y**2.0) <= 1.0) then incircle <- incircle + 1L
+           total <- total + 1L
+       total, incircle
+   let threads    = 8;
+   let nperthread = noPoints/threads; // approx.
+   let tasks = [| for i in 1..threads -> Task.Factory.StartNew(fun () -> calc nperthread) |]
+   let result = Task.Factory.ContinueWhenAll(
+                    tasks,
+                    fun tasks -> 
+                        let pointsCount = 
+                                tasks 
+                                |> Array.fold (fun accumulator (task:Task<int64 * int64>) -> 
+                                                   let (tot, circle) = task.Result 
+                                                   accumulator.total        <- (accumulator.total + tot)
+                                                   accumulator.insideCircle <- (accumulator.insideCircle + circle) 
+                                                   accumulator)
+                                              { insideCircle = 0L; total = 0L }
+                        4.0*(float pointsCount.insideCircle)/(float pointsCount.total)) 
+   result.Wait()
+   result.Result

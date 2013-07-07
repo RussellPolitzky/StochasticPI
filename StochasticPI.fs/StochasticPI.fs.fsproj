@@ -52,7 +52,6 @@
     <Compile Include="SequenceExtensions.fs" />
     <Compile Include="StochasticPi.fs" />
     <None Include="packages.config" />
-    <None Include="QuickStart.fsx" />
     <None Include="FmatDoc.chm" />
   </ItemGroup>
   <PropertyGroup>
