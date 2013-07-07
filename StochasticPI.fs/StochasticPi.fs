@@ -86,21 +86,22 @@ let fmatCalcPi n =
    let circ = new Matrix(d .< 1.0)
    let m = sum(circ,1)
    float(m)/(float)n*4.0
-
-
+   
 
 //------------------------------------------------------------------------------------
 // See: http://viralfsharp.com/2012/02/25/outperforming-mathnet-with-task-parallel-library/
 //      http://blogs.msdn.com/b/pfxteam/archive/2009/02/19/9434171.aspx
 // This parallel version uses the TPL and 8 threads to get the most out of 
-// the quad core i7.  
+// the quad core i7.  It is some 500% faster than the single threaded version
+// and 15 times faster than the infinite sequence version of this algorithm.
+// Its around 35 times faster than the version with the 
 //
 // Notice how much more effort it take to achieve this.
 //------------------------------------------------------------------------------------
 let TplPiImperative noPoints = 
    let seedGen = new Random() // Creates seeds for all random generators.
    let calc n = 
-       let randInstance     = new Random(seedGen.Next()) // Found I had to seed this or we got bad results.
+       let randInstance     = new Random(seedGen.Next()) // With the random seed we get poor quality randoms from this (same seed)
        let mutable incircle = 0L
        let mutable total    = 0L
        let mutable x        = 0.0 
@@ -112,7 +113,7 @@ let TplPiImperative noPoints =
            total <- total + 1L
        total, incircle
    let threads    = 8;
-   let nperthread = noPoints/threads; // approx.
+   let nperthread = noPoints/threads; // approx. slightly more than noPoints
    let tasks = [| for i in 1..threads -> Task.Factory.StartNew(fun () -> calc nperthread) |]
    let result = Task.Factory.ContinueWhenAll(
                     tasks,
